@@ -117,6 +117,19 @@ export interface ChangePasswordDTO {
   newPassword: string;
 }
 
+export interface ForgotPasswordDTO {
+  email: string;
+}
+
+export interface ResetPasswordDTO {
+  token: string;
+  newPassword: string;
+}
+
+export interface MessageDTO {
+  message: string;
+}
+
 // Representação de resposta paginada do Spring Data (Page<T>)
 export interface PageResponse<T> {
   content: T[];

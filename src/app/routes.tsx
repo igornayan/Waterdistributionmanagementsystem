@@ -4,6 +4,8 @@ import { DataProvider } from './context/DataContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './components/Login';
 import { ChangePassword } from './components/ChangePassword';
+import { ForgotPassword } from './components/ForgotPassword';
+import { ResetPassword } from './components/ResetPassword';
 import { FamilyList } from './components/FamilyList';
 import { FamilyForm } from './components/FamilyForm';
 import { FamilyDetails } from './components/FamilyDetails';
@@ -59,6 +61,8 @@ export const router = createBrowserRouter([
       },
       { path: 'login', Component: Login },
       { path: 'definir-senha', Component: ChangePassword },
+      { path: 'esqueci-senha', Component: ForgotPassword },
+      { path: 'redefinir-senha', Component: ResetPassword },
     ],
   },
 ]);

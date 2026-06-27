@@ -88,6 +88,17 @@ export function Login() {
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? 'Entrando...' : 'Entrar'}
             </Button>
+
+            <p className="text-center text-sm">
+              <button
+                type="button"
+                className="text-blue-600 hover:underline"
+                onClick={() => navigate('/esqueci-senha')}
+                disabled={isLoading}
+              >
+                Esqueci minha senha
+              </button>
+            </p>
           </form>
         </CardContent>
       </Card>

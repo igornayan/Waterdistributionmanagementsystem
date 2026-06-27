@@ -14,6 +14,7 @@ interface AuthContextType {
         email: string,
         userName?: string,
     ) => Promise<void>;
+    loginWithToken: (token: string, email: string, userName?: string) => void;
     logout: () => void;
     updateUser: (id: number, name: string, email: string) => Promise<void>;
 }
@@ -116,6 +117,14 @@ export function AuthProvider({children}: { children: ReactNode }) {
         persistSession(response.token, profile);
     };
 
+    const loginWithToken = (token: string, email: string, userName?: string) => {
+        const profile = buildProfileFromToken(token, {
+            name: userName ?? email.split('@')[0],
+            email,
+        });
+        persistSession(token, profile);
+    };
+
     const logout = () => {
         setUser(null);
         localStorage.removeItem('hf_token');
@@ -136,7 +145,7 @@ export function AuthProvider({children}: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{user, isLoading, login, completeFirstAccess, logout, updateUser}}>
+        <AuthContext.Provider value={{user, isLoading, login, completeFirstAccess, loginWithToken, logout, updateUser}}>
             {children}
         </AuthContext.Provider>
     );

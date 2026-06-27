@@ -2,7 +2,10 @@ import { BASE_URL } from './api';
 import {
   ChangePasswordDTO,
   FirstAccessDTO,
+  ForgotPasswordDTO,
   LoginDTO,
+  MessageDTO,
+  ResetPasswordDTO,
   TokenDTO,
 } from '../types';
 
@@ -74,6 +77,40 @@ export const authService = {
 
   updatePassword: async (data: ChangePasswordDTO): Promise<TokenDTO> => {
     return sendChangePassword('/auth/update-password', data);
+  },
+
+  forgotPassword: async (data: ForgotPasswordDTO): Promise<MessageDTO> => {
+    const response = await fetch(`${BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+
+    const body = await parseResponseBody(response);
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(body, `Erro HTTP: ${response.status}`));
+    }
+
+    return body as MessageDTO;
+  },
+
+  resetPassword: async (data: ResetPasswordDTO): Promise<TokenDTO> => {
+    const response = await fetch(`${BASE_URL}/auth/reset-password`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+
+    const body = await parseResponseBody(response);
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(body, `Erro HTTP: ${response.status}`));
+    }
+
+    return body as TokenDTO;
   },
 };
 

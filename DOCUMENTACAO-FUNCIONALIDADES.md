@@ -38,10 +38,11 @@ Sistema completo para gerenciamento de distribuição de água para famílias co
 ## 🔐 Módulo de Autenticação
 
 ### 1. Login de Usuários
-- **Autenticação**: Login com email e senha
-- **Validação**: Verificação de credenciais contra dados armazenados localmente
-- **Persistência**: Sessão mantida no localStorage
+- **Autenticação**: Login com email e senha via API (`POST /auth/login`)
+- **Persistência**: Token JWT armazenado no `localStorage` (`hf_token`)
 - **Redirecionamento**: Após login bem-sucedido, usuário é direcionado ao dashboard
+- **Primeiro acesso**: Se o backend retornar 403 com `userId`, redireciona para `/definir-senha`
+- **Link "Esqueci minha senha"**: Redireciona para `/esqueci-senha`
 - **Proteção de Rotas**: Rotas protegidas redirecionam usuários não autenticados para login
 
 ### 2. Cadastro de Usuários
@@ -51,12 +52,34 @@ Sistema completo para gerenciamento de distribuição de água para famílias co
 - **Login Automático**: Após cadastro, usuário é automaticamente autenticado
 
 ### 3. Primeiro Acesso / Definição de Senha
+- **Rota**: `/definir-senha`
 - **Tela**: `ChangePassword` — exibida no primeiro acesso ao sistema
 - **Senha Mínima**: 8 caracteres (validação no formulário e no submit)
 - **Campos**: Nova senha e confirmação de senha
+- **API**: `PATCH /auth/change-password`
 - **Ação**: Após definir a senha, o usuário é autenticado e redirecionado ao dashboard
 
-### 4. Logout
+### 4. Recuperação de Senha (Esqueci minha senha)
+- **Rota**: `/esqueci-senha`
+- **Tela**: `ForgotPassword`
+- **Campo**: Email do usuário
+- **API**: `POST /auth/forgot-password` — body `{ email: string }`
+- **Resposta**: Mensagem informando que, se o email estiver cadastrado, o token será enviado
+- **Após envio**: Exibe confirmação e opções para ir à redefinição ou voltar ao login
+- **Link**: "Já recebeu o token? Redefinir senha" → `/redefinir-senha`
+
+### 5. Redefinição de Senha com Token
+- **Rota**: `/redefinir-senha` (aceita `?token=...` na URL para pré-preencher o token)
+- **Tela**: `ResetPassword`
+- **Campos**:
+  - Token recebido por email
+  - Nova senha (mínimo 8 caracteres)
+  - Confirmação de senha
+- **API**: `PATCH /auth/reset-password` — body `{ token: string, newPassword: string }`
+- **Após sucesso**: Exibe toast de confirmação e **redireciona para `/login`** (sem login automático)
+- **Links**: Voltar ao login; solicitar token novamente em `/esqueci-senha`
+
+### 6. Logout
 - **Botão Independente**: Ícone de logout na barra superior
 - **Limpeza de Sessão**: Remove dados do usuário do localStorage
 - **Redirecionamento**: Retorna à tela de login
@@ -419,12 +442,15 @@ Volume Captado = Precipitação (mm) × Área (m²) × Eficiência (%) / 1000
   - Dados de precipitação adicionados
   - Perfil atualizado
   - Senha alterada / definida no primeiro acesso
+  - Senha redefinida com sucesso (recuperação)
+  - Solicitação de recuperação de senha enviada
 
 - ❌ Erro:
   - Validações de formulário
   - Coordenadas geográficas fora do intervalo permitido
   - Tentativa de registrar entrega em família inativa
   - Tentativa de atribuir cargo de administrador sem permissão
+  - Token inválido ou expirado (redefinição de senha)
   - Email já cadastrado
   - Senha antiga incorreta
   - Volumes inválidos
@@ -544,6 +570,16 @@ Um cargo é considerado de administrador quando:
 
 Base URL: `http://localhost:8080/hf`
 
+### Autenticação
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| POST | `/auth/login` | Login com email e senha |
+| PATCH | `/auth/change-password` | Define senha no primeiro acesso |
+| PATCH | `/auth/update-password` | Altera senha (usuário autenticado) |
+| POST | `/auth/forgot-password` | Solicita token de recuperação por email |
+| PATCH | `/auth/reset-password` | Redefine senha usando token do email |
+
 ### Famílias
 
 | Método | Endpoint | Descrição |
@@ -586,9 +622,49 @@ Base URL: `http://localhost:8080/hf`
 }
 ```
 
+### Modelo `ForgotPasswordDTO`
+
+```typescript
+{
+  email: string;
+}
+```
+
+### Modelo `ResetPasswordDTO`
+
+```typescript
+{
+  token: string;
+  newPassword: string;
+}
+```
+
+### Modelo `MessageDTO`
+
+```typescript
+{
+  message: string;
+}
+```
+
 ---
 
 ## 📋 Alterações Recentes
+
+### Versão 1.2 (Junho 2026)
+
+#### Recuperação de senha
+- Nova tela **`ForgotPassword`** (`/esqueci-senha`) — solicita email e chama `POST /auth/forgot-password`
+- Nova tela **`ResetPassword`** (`/redefinir-senha`) — token + nova senha via `PATCH /auth/reset-password`
+- Suporte a token na URL: `/redefinir-senha?token=...`
+- Link **"Esqueci minha senha"** adicionado na tela de login
+- Após redefinir senha, usuário é **redirecionado ao login** (sem autenticação automática)
+- Novos DTOs: `ForgotPasswordDTO`, `ResetPasswordDTO`, `MessageDTO`
+- Métodos `forgotPassword` e `resetPassword` em `authService.ts`
+
+---
+
+### Versão 1.1 (Junho 2026)
 
 Resumo das modificações implementadas na versão 1.1:
 
@@ -706,7 +782,9 @@ Resumo das modificações implementadas na versão 1.1:
 
 ### Rotas Públicas
 - `/login` - Tela de login
-- `/registro` - Tela de cadastro
+- `/definir-senha` - Definição de senha no primeiro acesso
+- `/esqueci-senha` - Solicitar recuperação de senha por email
+- `/redefinir-senha` - Redefinir senha com token recebido por email
 
 ### Rotas Protegidas (Requer Autenticação)
 - `/` - Dashboard (lista de famílias)
@@ -795,6 +873,14 @@ Resumo das modificações implementadas na versão 1.1:
 3. Adicionar dados de precipitação mensalmente
 4. Sistema usa dados para melhorar previsões
 
+### 5. Recuperação de Senha
+1. Na tela de login, clicar em **"Esqueci minha senha"**
+2. Informar o email cadastrado em `/esqueci-senha`
+3. Receber o token por email
+4. Acessar `/redefinir-senha` (ou link do email com `?token=...`)
+5. Informar token, nova senha e confirmação
+6. Após sucesso, fazer login normalmente com a nova senha
+
 ---
 
 ## 📊 Indicadores e Métricas
@@ -876,6 +962,6 @@ A interface amigável, sistema de alertas visuais e flexibilidade de configuraç
 
 ---
 
-**Versão**: 1.1  
+**Versão**: 1.2  
 **Data**: Junho 2026  
 **Desenvolvido para**: Gerenciamento de distribuição de água em comunidades com cisternas
