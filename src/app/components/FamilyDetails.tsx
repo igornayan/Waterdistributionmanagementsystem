@@ -16,7 +16,8 @@ import {
     Edit,
     MapPin,
     Plus,
-    Trash2,
+    Power,
+    PowerOff,
     TrendingUp,
     Users,
 } from 'lucide-react';
@@ -40,7 +41,7 @@ import {usePermission} from "./hooks/usePermission";
 export function FamilyDetails() {
     const {id} = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const {addWaterDelivery, deleteFamilyDataLocally} = useData();
+    const {addWaterDelivery} = useData();
 
     const {hasPermission} = usePermission();
 
@@ -50,6 +51,7 @@ export function FamilyDetails() {
     const [family, setFamily] = useState<FamilyDTO | null>(null);
     const [loadingFamily, setLoadingFamily] = useState(true);
     const [deliveries, setDeliveries] = useState<WaterDeliveryDTO[]>([]);
+    const [isTogglingActive, setIsTogglingActive] = useState(false);
 
     const familyIdNum = Number(id);
 
@@ -125,9 +127,15 @@ export function FamilyDetails() {
     const daysUntilEmpty = family.remainingDays ?? 0;
     const dailyConsumption = family.dailyConsumption ?? 0;
     const nextDateRaw = family.nextDeliveryDate;
+    const isFamilyActive = family.active !== false;
 
     const handleAddDelivery = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!isFamilyActive) {
+            toast.error('Não é possível registrar entrega para uma família inativa');
+            return;
+        }
 
         if (!deliveryVolume || parseFloat(deliveryVolume) <= 0) {
             toast.error('Digite o volume entregue');
@@ -179,6 +187,28 @@ export function FamilyDetails() {
         (a, b) => new Date(b.deliveryDate).getTime() - new Date(a.deliveryDate).getTime()
     );
 
+    const handleToggleFamilyActive = async () => {
+        if (!family.id) return;
+
+        setIsTogglingActive(true);
+        const nextActive = !isFamilyActive;
+        try {
+            if (isFamilyActive) {
+                await familyService.deactivateFamily(family.id);
+            } else {
+                await familyService.activateFamily(family.id);
+            }
+
+            setFamily((prev) => (prev ? {...prev, active: nextActive} : prev));
+            toast.success(isFamilyActive ? 'Família desativada' : 'Família ativada');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Erro ao atualizar status da família';
+            toast.error(message);
+        } finally {
+            setIsTogglingActive(false);
+        }
+    };
+
     return (
         <div className="container mx-auto p-6 max-w-6xl">
             <div className="flex items-center justify-between mb-6">
@@ -189,37 +219,71 @@ export function FamilyDetails() {
 
                 {(hasPermission('MANAGE_USERS') || hasPermission('ADMIN') || hasPermission('EDIT_FAMILY')) && (
                     <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => navigate(`/familia/${family.id}/editar`)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => navigate(`/familia/${family.id}/editar`)}
+                            disabled={!isFamilyActive}
+                            title={
+                                !isFamilyActive
+                                    ? 'Não é possível editar uma família inativa'
+                                    : 'Editar família'
+                            }
+                        >
                             <Edit className="mr-2 h-4 w-4" />
                             Editar
                         </Button>
 
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="outline" className="text-destructive hover:text-destructive">
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Excluir
+                                <Button
+                                    variant="outline"
+                                    className={
+                                        isFamilyActive
+                                            ? 'text-destructive hover:text-destructive'
+                                            : 'text-green-700 hover:text-green-700'
+                                    }
+                                    disabled={isTogglingActive}
+                                >
+                                    {isFamilyActive ? (
+                                        <>
+                                            <PowerOff className="mr-2 h-4 w-4" />
+                                            Desativar
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Power className="mr-2 h-4 w-4" />
+                                            Ativar
+                                        </>
+                                    )}
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirmar exclusão local</AlertDialogTitle>
+                                    <AlertDialogTitle>
+                                        {isFamilyActive ? 'Desativar família?' : 'Ativar família?'}
+                                    </AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Remover esta família da visualização local. (A exclusão no backend não está
-                                        implementada no controller base)
+                                        {isFamilyActive
+                                            ? `A família "${family.name}" será desativada e deixará de aparecer nas operações ativas do sistema.`
+                                            : `A família "${family.name}" será reativada e voltará a participar das operações do sistema.`}
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogCancel disabled={isTogglingActive}>Cancelar</AlertDialogCancel>
                                     <AlertDialogAction
-                                        onClick={() => {
-                                            deleteFamilyDataLocally(family.id!);
-                                            toast.success('Família oculta localmente');
-                                            navigate('/');
-                                        }}
-                                        className="bg-destructive hover:bg-destructive/90"
+                                        onClick={handleToggleFamilyActive}
+                                        disabled={isTogglingActive}
+                                        className={
+                                            isFamilyActive
+                                                ? 'bg-destructive hover:bg-destructive/90'
+                                                : 'bg-green-600 hover:bg-green-600/90'
+                                        }
                                     >
-                                        Confirmar
+                                        {isTogglingActive
+                                            ? 'Salvando...'
+                                            : isFamilyActive
+                                                ? 'Desativar'
+                                                : 'Ativar'}
                                     </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
@@ -247,6 +311,14 @@ export function FamilyDetails() {
                                         Entrega Urgente
                                     </Badge>
                                 )}
+                                    {!isFamilyActive && (
+                                        <Badge
+                                            variant="outline"
+                                            className="border-amber-300 bg-amber-50 text-amber-800 text-sm"
+                                        >
+                                            Inativa
+                                        </Badge>
+                                    )}
                             </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -389,10 +461,14 @@ export function FamilyDetails() {
                 </div>
 
                 <div className="space-y-6 order-1 lg:order-none">
-                    <Card>
+                    <Card className={!isFamilyActive ? 'opacity-75' : undefined}>
                         <CardHeader>
                             <CardTitle>Registrar Entrega</CardTitle>
-                            <CardDescription>Adicione uma nova entrega de água</CardDescription>
+                            <CardDescription>
+                                {isFamilyActive
+                                    ? 'Adicione uma nova entrega de água'
+                                    : 'Família inativa — o registro de entregas está desabilitado'}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleAddDelivery} className="space-y-4">
@@ -405,11 +481,15 @@ export function FamilyDetails() {
                                             value={deliveryDate}
                                             onChange={(e) => setDeliveryDate(e.target.value)}
                                             required
+                                            disabled={!isFamilyActive}
                                             className="[&::-webkit-calendar-picker-indicator]:hidden"
                                         />
                                         <CalendarIcon
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer"
+                                            className={`absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground ${
+                                                isFamilyActive ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                                            }`}
                                             onClick={() => {
+                                                if (!isFamilyActive) return;
                                                 const input = document.getElementById('deliveryDate') as HTMLInputElement;
                                                 input?.showPicker();
                                             }}
@@ -427,6 +507,7 @@ export function FamilyDetails() {
                                         placeholder="Ex: 8000"
                                         min="1"
                                         required
+                                        disabled={!isFamilyActive}
                                     />
                                 </div>
 
@@ -440,10 +521,11 @@ export function FamilyDetails() {
                                         placeholder="Ex: 8000"
                                         min="1"
                                         required
+                                        disabled={!isFamilyActive}
                                     />
                                 </div>
 
-                                <Button type="submit" className="w-full">
+                                <Button type="submit" className="w-full" disabled={!isFamilyActive}>
                                     <Plus className="mr-2 h-4 w-4" />
                                     Registrar Entrega
                                 </Button>

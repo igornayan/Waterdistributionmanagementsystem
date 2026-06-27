@@ -45,8 +45,8 @@ export function ChangePassword() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (newPassword.length < 6) {
-      toast.error('A senha deve ter no mínimo 6 caracteres');
+    if (newPassword.length < 8) {
+      toast.error('A senha deve ter no mínimo 8 caracteres');
       return;
     }
 
@@ -103,7 +103,7 @@ export function ChangePassword() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Digite sua nova senha"
                   required
-                  minLength={6}
+                  minLength={8}
                   disabled={isLoading}
                   className="pr-10"
                 />
@@ -118,7 +118,7 @@ export function ChangePassword() {
                 </button>
               </div>
               <p className="text-xs text-muted-foreground">
-                A senha deve ter no mínimo 6 caracteres
+                A senha deve ter no mínimo 8 caracteres
               </p>
             </div>
 
@@ -132,7 +132,7 @@ export function ChangePassword() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Digite novamente sua senha"
                   required
-                  minLength={6}
+                  minLength={8}
                   disabled={isLoading}
                   className="pr-10"
                 />

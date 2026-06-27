@@ -49,4 +49,16 @@ export const familyService = {
       method: 'GET',
     });
   },
+
+  activateFamily: (id: number): Promise<FamilyDTO> => {
+    return apiFetch<FamilyDTO>(`/families/${id}/activate`, {
+      method: 'PATCH',
+    });
+  },
+
+  deactivateFamily: (id: number): Promise<FamilyDTO> => {
+    return apiFetch<FamilyDTO>(`/families/${id}/deactivate`, {
+      method: 'PATCH',
+    });
+  },
 };

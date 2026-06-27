@@ -18,6 +18,7 @@ export interface CisternDTO {
 export interface FamilyDTO {
   id?: number;
   name: string;
+  active?: boolean;
   hasGutterSystem: boolean;
   gutterAreaM2: number | null;
   gutterEfficiencyCoefficient: number | null;
@@ -90,6 +91,10 @@ export interface UserDTO {
 export interface UpdateUserDTO {
   name: string;
   email: string;
+}
+
+export interface UpdateUserRoleDTO {
+  roleId: number;
 }
 
 export interface LoginDTO {

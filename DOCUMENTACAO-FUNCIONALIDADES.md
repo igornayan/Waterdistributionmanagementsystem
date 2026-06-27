@@ -15,6 +15,9 @@
 8. [Configurações do Sistema](#configurações-do-sistema)
 9. [Sistema de Alertas](#sistema-de-alertas)
 10. [Perfil do Usuário](#perfil-do-usuário)
+11. [Gerenciamento de Usuários e Cargos](#gerenciamento-de-usuários-e-cargos)
+12. [Integração com API Backend](#integração-com-api-backend)
+13. [Alterações Recentes](#alterações-recentes)
 
 ---
 
@@ -44,10 +47,16 @@ Sistema completo para gerenciamento de distribuição de água para famílias co
 ### 2. Cadastro de Usuários
 - **Campos**: Nome completo, email e senha
 - **Validação de Email**: Verifica se email já está cadastrado
-- **Senha Mínima**: Requisito de 6 caracteres
+- **Senha Mínima**: Requisito de 8 caracteres
 - **Login Automático**: Após cadastro, usuário é automaticamente autenticado
 
-### 3. Logout
+### 3. Primeiro Acesso / Definição de Senha
+- **Tela**: `ChangePassword` — exibida no primeiro acesso ao sistema
+- **Senha Mínima**: 8 caracteres (validação no formulário e no submit)
+- **Campos**: Nova senha e confirmação de senha
+- **Ação**: Após definir a senha, o usuário é autenticado e redirecionado ao dashboard
+
+### 4. Logout
 - **Botão Independente**: Ícone de logout na barra superior
 - **Limpeza de Sessão**: Remove dados do usuário do localStorage
 - **Redirecionamento**: Retorna à tela de login
@@ -61,6 +70,7 @@ Sistema completo para gerenciamento de distribuição de água para famílias co
 - **Informações Exibidas por Card**:
   - Nome da família
   - Status de urgência (badge colorido)
+  - Badge **Inativa** (âmbar) quando a família está desativada
   - Coordenadas geográficas (latitude/longitude)
   - Número de membros
   - Capacidade total das cisternas
@@ -89,6 +99,7 @@ Sistema completo para gerenciamento de distribuição de água para famílias co
 - **Botão "Nova Família"**: Acesso rápido ao cadastro
 - **Botão "Configurações"**: Acesso às configurações do sistema
 - **Click no Card**: Abre detalhes completos da família
+- **Famílias inativas**: Cards exibem badge **Inativa** (cor âmbar) e leve opacidade reduzida; os dados continuam visíveis na listagem
 - **Menu do Usuário**: Avatar com dropdown para perfil e logout
 
 ---
@@ -99,6 +110,10 @@ Sistema completo para gerenciamento de distribuição de água para famílias co
 **Informações Básicas**:
 - Nome da família (obrigatório)
 - Coordenadas geográficas (latitude e longitude)
+- **Validação de coordenadas**:
+  - Latitude: entre **-90** e **90**
+  - Longitude: entre **-180** e **180**
+  - Validação nos inputs (`min`/`max`) e no submit (toast de erro)
 
 **Membros da Família**:
 - Adicionar múltiplos membros
@@ -131,6 +146,7 @@ Sistema completo para gerenciamento de distribuição de água para famílias co
 - **Informações Gerais**:
   - Nome e coordenadas
   - Badge de urgência (se aplicável)
+  - Badge **Inativa** (cor âmbar) quando `active === false`
   - Número de membros
   - Capacidade total das cisternas
   - Consumo diário calculado
@@ -152,22 +168,37 @@ Sistema completo para gerenciamento de distribuição de água para famílias co
   - Capacidade e volume inicial de cada uma
 
 **Painel Direito (Lateral)**:
-- **Formulário de Registro de Entrega**
-- **Histórico de Entregas** (últimas 5)
+- **Formulário de Registro de Entrega** (desabilitado quando a família está inativa)
+- **Histórico de Entregas**
+
+**Ações disponíveis** (usuários com permissão):
+- **Editar**: abre formulário de edição (desabilitado para família inativa)
+- **Ativar / Desativar**: alterna o status da família via API, com confirmação em dialog
+- Ao ativar/desativar, apenas o campo `active` é atualizado no front — os demais dados exibidos (nível da cisterna, dias restantes etc.) permanecem inalterados
+
+**Comportamento de família inativa**:
+- Dados da família permanecem visíveis normalmente
+- Botão **Editar** desabilitado
+- Formulário **Registrar Entrega** desabilitado (inputs, botão e calendário)
+- Mensagem informativa no card de entrega: *"Família inativa — o registro de entregas está desabilitado"*
 
 ### 3. Edição de Família
 - Todos os campos do cadastro disponíveis para edição
+- Mesma **validação de latitude/longitude** do cadastro (-90 a 90 / -180 a 180)
 - Adicionar/remover membros
 - Adicionar/remover cisternas
 - Atualizar informações de captação de chuva
 - Botão "Salvar Alterações"
 - Botão "Cancelar" para descartar mudanças
+- Não é possível editar família inativa (acesso bloqueado na tela de detalhes)
 
-### 4. Exclusão de Família
-- Botão de exclusão com confirmação
-- Dialog de alerta com confirmação dupla
-- Aviso sobre perda de dados e histórico
-- Redirecionamento ao dashboard após exclusão
+### 4. Ativação e Desativação de Família
+- Substitui a exclusão de família
+- Botão **Desativar** (vermelho) quando a família está ativa
+- Botão **Ativar** (verde) quando a família está inativa
+- Dialog de confirmação antes da ação
+- Integração com API backend (`PATCH /families/{id}/activate` e `PATCH /families/{id}/deactivate`)
+- Família desativada continua acessível na listagem e nos detalhes, com indicador visual de status inativo
 
 ---
 
@@ -380,15 +411,20 @@ Volume Captado = Precipitação (mm) × Área (m²) × Eficiência (%) / 1000
 - ✅ Sucesso:
   - Família cadastrada
   - Família atualizada
-  - Família excluída
+  - Família ativada / desativada
   - Entrega registrada
+  - Usuário adicionado / cargo atualizado / usuário removido
+  - Cargo adicionado / atualizado / removido
   - Configurações salvas
   - Dados de precipitação adicionados
   - Perfil atualizado
-  - Senha alterada
+  - Senha alterada / definida no primeiro acesso
 
 - ❌ Erro:
   - Validações de formulário
+  - Coordenadas geográficas fora do intervalo permitido
+  - Tentativa de registrar entrega em família inativa
+  - Tentativa de atribuir cargo de administrador sem permissão
   - Email já cadastrado
   - Senha antiga incorreta
   - Volumes inválidos
@@ -431,8 +467,8 @@ Volume Captado = Precipitação (mm) × Área (m²) × Eficiência (%) / 1000
 - Descrição explicativa
 - Campos:
   - **Senha Antiga**: Campo obrigatório, tipo password
-  - **Nova Senha**: Campo obrigatório, mínimo 6 caracteres
-  - Hint: "A senha deve ter no mínimo 6 caracteres"
+  - **Nova Senha**: Campo obrigatório, mínimo 8 caracteres
+  - Hint: "A senha deve ter no mínimo 8 caracteres"
 
 **Botões**:
 - "Cancelar": Fecha modal sem salvar
@@ -440,7 +476,7 @@ Volume Captado = Precipitação (mm) × Área (m²) × Eficiência (%) / 1000
 
 **Validações**:
 - Todos os campos obrigatórios
-- Nova senha mínimo 6 caracteres
+- Nova senha mínimo 8 caracteres
 - Verifica se senha antiga está correta
 - Notifica erro se senha antiga incorreta
 - Notifica sucesso e fecha modal ao concluir
@@ -448,6 +484,135 @@ Volume Captado = Precipitação (mm) × Área (m²) × Eficiência (%) / 1000
 ### 4. Navegação
 - Botão "Voltar" para retornar ao dashboard
 - Integração com sistema de rotas protegidas
+
+---
+
+## 👥 Gerenciamento de Usuários e Cargos
+
+Tela: `UserManagement` — rota `/usuarios` (requer autenticação e permissões administrativas).
+
+### 1. Abas
+
+**Usuários**:
+- Listagem em tabela (desktop) e cards (mobile)
+- Colunas: Nome, Email/Login, Cargo, Ações
+- Cargo exibido como **texto** (não é mais um select inline na listagem)
+- Botão **Adicionar Usuário**
+
+**Cargos**:
+- Listagem de cargos com permissões associadas
+- Criar, editar e remover cargos
+- Atribuição de permissões por checkbox
+
+### 2. Ações por usuário
+
+| Ação | Quem pode | Restrições |
+|------|-----------|------------|
+| **Editar cargo** | `MANAGE_USERS`, `ADMIN` ou `EDIT_FAMILY` | Não pode editar o próprio cargo |
+| **Remover usuário** | Apenas `ADMIN` | Não pode remover a própria conta |
+| **Atribuir cargo com permissão ADMIN** | Apenas `ADMIN` | Na criação e na edição de usuário |
+
+### 3. Criar usuário
+
+- Campos: nome, email/login, senha (mín. 8 caracteres), cargo
+- Select de cargo desabilita opções cujo cargo possui permissão `ADMIN` para não administradores
+- Validação no submit impede criar usuário com cargo de administrador sem permissão `ADMIN`
+- API: `POST /users`
+
+### 4. Editar cargo do usuário
+
+- Dialog **Editar Usuário** com email (somente leitura) e select de cargo
+- API: `PUT /user-management/users/{id}/role` — body `{ roleId: number }`
+- Mesma restrição: apenas administradores podem atribuir cargos com permissão `ADMIN`
+
+### 5. Remover usuário
+
+- Botão de lixeira visível apenas para administradores
+- Dialog de confirmação
+- API: `DELETE /user-management/users/{id}` (resposta 204)
+- Usuário removido da lista local após sucesso
+
+### 6. Regras de cargo administrador
+
+Um cargo é considerado de administrador quando:
+- Possui a permissão `ADMIN` na lista `permissions` do cargo, **ou**
+- Seu nome é `admin` ou `administrador` (fallback quando permissões não vêm na API)
+
+---
+
+## 🔌 Integração com API Backend
+
+Base URL: `http://localhost:8080/hf`
+
+### Famílias
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/families` | Lista famílias (paginado) |
+| GET | `/families/{id}` | Busca família por ID |
+| POST | `/families` | Cria família |
+| PUT | `/families/{id}` | Atualiza família |
+| PATCH | `/families/{id}/activate` | Ativa família |
+| PATCH | `/families/{id}/deactivate` | Desativa família |
+
+### Gerenciamento de usuários
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/user-management` | Lista usuários |
+| POST | `/users` | Cria usuário |
+| PUT | `/user-management/users/{id}/role` | Atualiza cargo do usuário |
+| DELETE | `/user-management/users/{id}` | Remove usuário |
+| GET | `/user-management/roles` | Lista cargos |
+| POST | `/user-management/create-role` | Cria cargo |
+| PUT | `/user-management/roles/{id}` | Atualiza cargo |
+| DELETE | `/user-management/roles/{id}` | Remove cargo |
+| GET | `/user-management/permissions` | Lista permissões |
+
+### Modelo `FamilyDTO` (campo adicionado)
+
+```typescript
+{
+  // ... demais campos
+  active?: boolean;  // true = ativa (padrão), false = inativa
+}
+```
+
+### Modelo `UpdateUserRoleDTO`
+
+```typescript
+{
+  roleId: number;
+}
+```
+
+---
+
+## 📋 Alterações Recentes
+
+Resumo das modificações implementadas na versão 1.1:
+
+### Gerenciamento de usuários (`UserManagement.tsx`)
+- Coluna **Cargo** passou a exibir apenas o nome do cargo (sem select inline)
+- Adicionada ação **Editar** (ícone lápis) para alterar cargo via dialog
+- Integração com `PUT /user-management/users/{id}/role`
+- **Remover usuário** integrado à API `DELETE /user-management/users/{id}`
+- Botão de remover visível **somente para administradores** (`ADMIN`)
+- Apenas administradores podem atribuir cargos com permissão `ADMIN` (criação e edição)
+
+### Famílias — ativação/desativação
+- Substituída exclusão local por **Ativar / Desativar** (`FamilyDetails.tsx`)
+- Campo `active: boolean` adicionado ao `FamilyDTO`
+- Serviços `activateFamily` e `deactivateFamily` em `familyService.ts`
+- Família inativa: badge **Inativa** (cor âmbar) na listagem e nos detalhes
+- Edição e registro de entrega **desabilitados** para família inativa
+- Toggle de status atualiza apenas `active` no front (sem recarregar dados calculados)
+
+### Validação de coordenadas
+- `FamilyForm.tsx` e `FamilyEdit.tsx`: latitude (-90 a 90) e longitude (-180 a 180)
+
+### Autenticação
+- `ChangePassword.tsx`: senha mínima alterada de 6 para **8 caracteres**
 
 ---
 
@@ -477,6 +642,7 @@ Volume Captado = Precipitação (mm) × Área (m²) × Eficiência (%) / 1000
 {
   id: string;
   name: string;
+  active?: boolean;
   cisterns: Cistern[];
   hasRainGutter: boolean;
   rainCaptureEfficiency?: number;
@@ -549,6 +715,7 @@ Volume Captado = Precipitação (mm) × Área (m²) × Eficiência (%) / 1000
 - `/familia/:id/editar` - Edição da família
 - `/configuracoes` - Configurações do sistema
 - `/perfil` - Perfil do usuário
+- `/usuarios` - Gerenciamento de usuários e cargos
 
 ### Proteção de Rotas
 - Middleware verifica presença de usuário logado
@@ -709,6 +876,6 @@ A interface amigável, sistema de alertas visuais e flexibilidade de configuraç
 
 ---
 
-**Versão**: 1.0  
-**Data**: Março 2026  
+**Versão**: 1.1  
+**Data**: Junho 2026  
 **Desenvolvido para**: Gerenciamento de distribuição de água em comunidades com cisternas

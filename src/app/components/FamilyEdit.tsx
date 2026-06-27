@@ -10,6 +10,11 @@ import { Plus, Trash2, ArrowLeft, AlertCircle, Droplets } from 'lucide-react';
 import { MemberDTO, CisternDTO } from '../types';
 import { toast } from 'sonner';
 
+const LATITUDE_MIN = -90;
+const LATITUDE_MAX = 90;
+const LONGITUDE_MIN = -180;
+const LONGITUDE_MAX = 180;
+
 export function FamilyEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -99,6 +104,27 @@ export function FamilyEdit() {
       return;
     }
 
+    const parsedLatitude = parseFloat(latitude);
+    const parsedLongitude = parseFloat(longitude);
+
+    if (
+      Number.isNaN(parsedLatitude) ||
+      parsedLatitude < LATITUDE_MIN ||
+      parsedLatitude > LATITUDE_MAX
+    ) {
+      toast.error(`Latitude deve estar entre ${LATITUDE_MIN} e ${LATITUDE_MAX}`);
+      return;
+    }
+
+    if (
+      Number.isNaN(parsedLongitude) ||
+      parsedLongitude < LONGITUDE_MIN ||
+      parsedLongitude > LONGITUDE_MAX
+    ) {
+      toast.error(`Longitude deve estar entre ${LONGITUDE_MIN} e ${LONGITUDE_MAX}`);
+      return;
+    }
+
     const validMembers = members.filter((m) => m.name.trim() && m.age > 0);
     if (validMembers.length === 0) {
       toast.error('Deve haver pelo menos um membro da família com nome e idade válidos');
@@ -119,8 +145,8 @@ export function FamilyEdit() {
         hasGutterSystem,
         gutterEfficiencyCoefficient: hasGutterSystem ? parseFloat(gutterEfficiencyCoefficient) : null,
         gutterAreaM2: hasGutterSystem ? parseFloat(gutterAreaM2) : null,
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
+        latitude: parsedLatitude,
+        longitude: parsedLongitude,
         members: validMembers,
         cisterns: validCisterns,
         familyStatus: family.familyStatus,
@@ -173,6 +199,8 @@ export function FamilyEdit() {
                     value={latitude}
                     onChange={(e) => setLatitude(e.target.value)}
                     placeholder="Ex: -8.0476"
+                    min={LATITUDE_MIN}
+                    max={LATITUDE_MAX}
                     required
                   />
                 </div>
@@ -186,6 +214,8 @@ export function FamilyEdit() {
                     value={longitude}
                     onChange={(e) => setLongitude(e.target.value)}
                     placeholder="Ex: -34.8770"
+                    min={LONGITUDE_MIN}
+                    max={LONGITUDE_MAX}
                     required
                   />
                 </div>

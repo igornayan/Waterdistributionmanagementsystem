@@ -5,8 +5,8 @@ import {
   PermissionDTO,
   RoleDTO,
   UpdateUserDTO,
+  UpdateUserRoleDTO,
   UserDTO,
-  UserRole,
 } from '../types';
 
 const USER_MANAGEMENT_BASE = '/user-management';
@@ -72,22 +72,15 @@ export const userService = {
     });
   },
 
-  updateUserRole: (id: number, role: UserRole): Promise<UserDTO> => {
-    return apiFetch<UserDTO>(`${USER_MANAGEMENT_BASE}/${id}`, {
+  updateUserRole: (id: number, data: UpdateUserRoleDTO): Promise<UserDTO> => {
+    return apiFetch<UserDTO>(`${USER_MANAGEMENT_BASE}/users/${id}/role`, {
       method: 'PUT',
-      body: JSON.stringify({ role }),
-    });
-  },
-
-  updateUserCargo: (id: number, cargoId: number): Promise<UserDTO> => {
-    return apiFetch<UserDTO>(`${USER_MANAGEMENT_BASE}/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ cargoId }),
+      body: JSON.stringify(data),
     });
   },
 
   deleteUser: (id: number): Promise<void> => {
-    return apiFetch<void>(`${USER_MANAGEMENT_BASE}/${id}`, {
+    return apiFetch<void>(`${USER_MANAGEMENT_BASE}/users/${id}`, {
       method: 'DELETE',
     });
   },

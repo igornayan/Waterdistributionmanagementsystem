@@ -10,6 +10,11 @@ import { ArrowLeft, Plus, Trash2, Users, Droplets } from 'lucide-react';
 import { MemberDTO, CisternDTO, FamilyDTO } from '../types';
 import { toast } from 'sonner';
 
+const LATITUDE_MIN = -90;
+const LATITUDE_MAX = 90;
+const LONGITUDE_MIN = -180;
+const LONGITUDE_MAX = 180;
+
 export function FamilyForm() {
   const navigate = useNavigate();
   const { addFamily } = useData();
@@ -85,14 +90,35 @@ export function FamilyForm() {
       }
     }
 
+    const parsedLatitude = parseFloat(latitude);
+    const parsedLongitude = parseFloat(longitude);
+
+    if (
+      Number.isNaN(parsedLatitude) ||
+      parsedLatitude < LATITUDE_MIN ||
+      parsedLatitude > LATITUDE_MAX
+    ) {
+      toast.error(`Latitude deve estar entre ${LATITUDE_MIN} e ${LATITUDE_MAX}`);
+      return;
+    }
+
+    if (
+      Number.isNaN(parsedLongitude) ||
+      parsedLongitude < LONGITUDE_MIN ||
+      parsedLongitude > LONGITUDE_MAX
+    ) {
+      toast.error(`Longitude deve estar entre ${LONGITUDE_MIN} e ${LONGITUDE_MAX}`);
+      return;
+    }
+
     const family: FamilyDTO = {
       name: familyName,
       cisterns: validCisterns,
       hasGutterSystem,
       gutterEfficiencyCoefficient: hasGutterSystem ? parseFloat(gutterEfficiencyCoefficient) : null,
       gutterAreaM2: hasGutterSystem ? parseFloat(gutterAreaM2) : null,
-      latitude: parseFloat(latitude),
-      longitude: parseFloat(longitude),
+      latitude: parsedLatitude,
+      longitude: parsedLongitude,
       members: validMembers,
       familyStatus: 'NORMAL',
     };
@@ -217,6 +243,8 @@ export function FamilyForm() {
                     value={latitude}
                     onChange={(e) => setLatitude(e.target.value)}
                     placeholder="Ex: -8.0476"
+                    min={LATITUDE_MIN}
+                    max={LATITUDE_MAX}
                     required
                   />
                 </div>
@@ -230,6 +258,8 @@ export function FamilyForm() {
                     value={longitude}
                     onChange={(e) => setLongitude(e.target.value)}
                     placeholder="Ex: -34.8770"
+                    min={LONGITUDE_MIN}
+                    max={LONGITUDE_MAX}
                     required
                   />
                 </div>

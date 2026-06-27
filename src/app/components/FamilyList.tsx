@@ -177,6 +177,7 @@ export function FamilyList() {
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             {filteredAndSortedFamilies.map((family) => {
                                 const badge = getFamilyStatusBadge(family.familyStatus);
+                                const isFamilyActive = family.active !== false;
                                 const totalCapacity = family.cisterns.reduce((sum, c) => sum + c.capacityLiters, 0);
                                 const currentLevel = family.cisterns.reduce((sum, c) => sum + c.currentLevelLiters, 0);
                                 const percentageFull = totalCapacity ? Math.round((currentLevel / totalCapacity) * 100) : 0;
@@ -187,13 +188,25 @@ export function FamilyList() {
                                 return (
                                     <Card
                                         key={family.id}
-                                        className="cursor-pointer hover:shadow-lg transition-shadow"
+                                        className={`cursor-pointer hover:shadow-lg transition-shadow ${
+                                            !isFamilyActive ? 'opacity-80' : ''
+                                        }`}
                                         onClick={() => navigate(`/familia/${family.id}`)}
                                     >
                                         <CardHeader>
-                                            <div className="flex justify-between items-start mb-2">
+                                            <div className="flex justify-between items-start mb-2 gap-2">
                                                 <CardTitle className="text-xl">{family.name}</CardTitle>
-                                                <Badge variant={badge.variant}>{badge.label}</Badge>
+                                                <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                                                    {!isFamilyActive && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="border-amber-300 bg-amber-50 text-amber-800"
+                                                        >
+                                                            Inativa
+                                                        </Badge>
+                                                    )}
+                                                    <Badge variant={badge.variant}>{badge.label}</Badge>
+                                                </div>
                                             </div>
                                             <CardDescription className="flex items-center gap-2">
                                                 <MapPin className="h-3 w-3" />

@@ -1,11 +1,31 @@
+# Water Distribution Management System
 
-  # Water Distribution Management System (cópia)
+Sistema de gerenciamento de distribuição de água para famílias com cisternas em regiões semiáridas.
 
-  This is a code bundle for Water Distribution Management System (cópia). The original project is available at https://www.figma.com/design/lbCfaWPMnaJc3nSRtdRDVZ/Water-Distribution-Management-System--c%C3%B3pia-.
+Documentação completa de funcionalidades: [DOCUMENTACAO-FUNCIONALIDADES.md](./DOCUMENTACAO-FUNCIONALIDADES.md)
 
-  ## Running the code
+## Executar o projeto
 
-  Run `npm i` to install the dependencies.
+```bash
+npm i
+npm run dev
+```
 
-  Run `npm run dev` to start the development server.
-  
+## Alterações recentes (v1.1)
+
+### Gerenciamento de usuários
+- Cargo exibido como texto na listagem; edição via dialog
+- API de atualização de cargo: `PUT /user-management/users/{id}/role`
+- API de remoção de usuário: `DELETE /user-management/users/{id}`
+- Remover usuário: apenas administradores
+- Atribuir cargo com permissão `ADMIN`: apenas administradores (criação e edição)
+
+### Famílias
+- Ativar/desativar família no lugar de excluir (`PATCH /families/{id}/activate|deactivate`)
+- Campo `active` no `FamilyDTO`
+- Badge **Inativa** (cor âmbar) na listagem e nos detalhes
+- Família inativa: edição e registro de entrega desabilitados; demais dados permanecem visíveis
+
+### Validações e autenticação
+- Latitude (-90 a 90) e longitude (-180 a 180) no cadastro e edição de família
+- Senha mínima de 8 caracteres no primeiro acesso (`ChangePassword`)

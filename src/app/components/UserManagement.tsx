@@ -25,6 +25,7 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from './
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from './ui/table';
 import {ArrowLeft, Briefcase, Pencil, Shield, Trash2, User, UserPlus, Users,} from 'lucide-react';
 import {toast} from 'sonner';
+import {usePermission} from './hooks/usePermission';
 
 function getPermissionLabel(permission: PermissionDTO) {
     return permission.label || permission.name;
@@ -90,58 +91,83 @@ function formatRegistrationDate(dateStr?: string) {
     return new Date(dateStr).toLocaleDateString('pt-BR');
 }
 
+function isAdminRoleName(name?: string): boolean {
+    const normalized = name?.toLowerCase();
+    return normalized === 'admin' || normalized === 'administrador';
+}
+
 function isAdminCargo(cargoName?: string, role?: UserRole) {
-    return role === 'ADMIN' || cargoName?.toLowerCase() === 'admin';
+    return role === 'ADMIN' || isAdminRoleName(cargoName);
+}
+
+function isAdminRoleCargo(cargo: RoleDTO): boolean {
+    if (cargo.permissions && cargo.permissions.length > 0) {
+        return cargo.permissions.some((permission) => permission.name === 'ADMIN');
+    }
+    return isAdminRoleName(cargo.name);
+}
+
+function getDefaultAssignableCargo(cargos: RoleDTO[], canAssignAdminCargo: boolean): RoleDTO | undefined {
+    const usuarioCargo = cargos.find((c) => c.name.toLowerCase() === 'usuario');
+    if (usuarioCargo && (canAssignAdminCargo || !isAdminRoleCargo(usuarioCargo))) {
+        return usuarioCargo;
+    }
+    return cargos.find((c) => canAssignAdminCargo || !isAdminRoleCargo(c));
 }
 
 function resolveUserCargoId(user: UserDTO, cargos: RoleDTO[]): number | undefined {
     if (user.roleId != null) return user.roleId;
     if (user.cargoId != null) return user.cargoId;
-    if (user.role === 'ADMIN') return cargos.find((c) => c.name.toLowerCase() === 'admin')?.id;
-    if (user.role === 'USER') return cargos.find((c) => c.name.toLowerCase() === 'usuario')?.id;
+    if (user.role === 'ADMIN') {
+        return cargos.find((c) => c.name.toLowerCase() === 'admin' || c.name.toLowerCase() === 'administrador')?.id;
+    }
+    if (user.role === 'USER') {
+        return cargos.find((c) => c.name.toLowerCase() === 'usuario')?.id;
+    }
     return cargos[0]?.id;
 }
 
-function CargoSelect({
-                         value,
-                         cargos,
-                         disabled,
-                         onChange,
-                     }: {
-    value?: number;
-    cargos: RoleDTO[];
-    disabled?: boolean;
-    onChange: (cargoId: number) => void;
-}) {
-    const selected = cargos.find((c) => c.id === value);
+function resolveUserCargoName(user: UserDTO, cargos: RoleDTO[]): string {
+    if (user.cargoName) return user.cargoName;
+
+    const cargoId = user.roleId ?? user.cargoId;
+    if (cargoId != null) {
+        const cargo = cargos.find((c) => c.id === cargoId);
+        if (cargo) return cargo.name;
+    }
+
+    if (user.role === 'ADMIN') {
+        return cargos.find((c) => c.name.toLowerCase() === 'admin' || c.name.toLowerCase() === 'administrador')?.name ?? 'Administrador';
+    }
+    if (user.role === 'USER') {
+        return cargos.find((c) => c.name.toLowerCase() === 'usuario')?.name ?? 'Usuário';
+    }
+
+    return '—';
+}
+
+function UserCargoLabel({user, cargos}: { user: UserDTO; cargos: RoleDTO[] }) {
+    const cargoName = resolveUserCargoName(user, cargos);
+
+    if (cargoName === '—') {
+        return <span className="text-muted-foreground">—</span>;
+    }
 
     return (
-        <Select
-            value={value != null ? String(value) : undefined}
-            onValueChange={(v) => onChange(Number(v))}
-            disabled={disabled || cargos.length === 0}
-        >
-            <SelectTrigger
-                size="sm"
-                className="w-full min-w-[120px] max-w-[160px] border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 disabled:opacity-60"
-            >
-                <Shield className="h-3.5 w-3.5 shrink-0" />
-                <SelectValue placeholder="Selecione">{selected?.name ?? '—'}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-                {cargos.map((cargo) => (
-                    <SelectItem key={cargo.id} value={String(cargo.id)}>
-                        {cargo.name}
-                    </SelectItem>
-                ))}
-            </SelectContent>
-        </Select>
+        <span className="inline-flex items-center gap-1.5 text-sm">
+            {isAdminCargo(cargoName, user.role) && (
+                <Shield className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+            )}
+            {cargoName}
+        </span>
     );
 }
 
 export function UserManagement() {
     const navigate = useNavigate();
     const {user: currentUser} = useAuth();
+    const {hasPermission} = usePermission();
+    const canDeleteUsers = hasPermission('ADMIN');
 
     const [cargos, setCargos] = useState<RoleDTO[]>([]);
     const [users, setUsers] = useState<UserDTO[]>([]);
@@ -149,6 +175,9 @@ export function UserManagement() {
     const [loadingCargos, setLoadingCargos] = useState(true);
 
     const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
+    const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<UserDTO | null>(null);
+    const [editCargoId, setEditCargoId] = useState<number | undefined>();
     const [cargoDialogOpen, setCargoDialogOpen] = useState(false);
     const [editingCargo, setEditingCargo] = useState<RoleDTO | null>(null);
     const [userToDelete, setUserToDelete] = useState<UserDTO | null>(null);
@@ -214,36 +243,56 @@ export function UserManagement() {
 
     useEffect(() => {
         if (newCargoId == null && cargos.length > 0) {
-            const defaultCargo =
-                cargos.find((c) => c.name.toLowerCase() === 'usuario') ?? cargos[0];
-            setNewCargoId(defaultCargo.id);
+            setNewCargoId(getDefaultAssignableCargo(cargos, canDeleteUsers)?.id);
         }
-    }, [cargos, newCargoId]);
+    }, [cargos, newCargoId, canDeleteUsers]);
 
-    const handleCargoChange = async (target: UserDTO, cargoId: number) => {
-        if (!target.id || isCurrentUser(target)) return;
+    const resetEditUserForm = () => {
+        setEditingUser(null);
+        setEditCargoId(undefined);
+    };
 
-        const cargo = cargos.find((c) => c.id === cargoId);
-        const previous = users;
-        setUsers((list) =>
-            list.map((u) =>
-                u.id === target.id
-                    ? {
-                        ...u,
-                        cargoId,
-                        cargoName: cargo?.name,
-                        role: cargo?.name.toLowerCase() === 'admin' ? 'ADMIN' : 'USER'
-                    }
-                    : u,
-            ),
-        );
+    const openEditUserDialog = (user: UserDTO) => {
+        setEditingUser(user);
+        setEditCargoId(resolveUserCargoId(user, cargos));
+        setEditUserDialogOpen(true);
+    };
 
+    const handleEditUserSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingUser?.id || editCargoId == null) return;
+
+        const cargo = cargos.find((c) => c.id === editCargoId);
+
+        if (cargo && !canDeleteUsers && isAdminRoleCargo(cargo)) {
+            toast.error('Apenas administradores podem atribuir um cargo com permissão de administrador');
+            return;
+        }
+
+        setIsSubmitting(true);
         try {
-            await userService.updateUserCargo(target.id, cargoId);
+            const updated = await userService.updateUserRole(editingUser.id, {roleId: editCargoId});
+            setUsers((list) =>
+                list.map((u) =>
+                    u.id === editingUser.id
+                        ? {
+                            ...u,
+                            ...updated,
+                            roleId: updated.roleId ?? editCargoId,
+                            cargoId: updated.roleId ?? updated.cargoId ?? editCargoId,
+                            cargoName: updated.cargoName ?? cargo?.name,
+                        }
+                        : u,
+                ),
+            );
             toast.success('Cargo atualizado');
-        } catch {
-            setUsers(previous);
-            toast.error('Erro ao atualizar cargo');
+            setEditUserDialogOpen(false);
+            resetEditUserForm();
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Erro ao atualizar cargo';
+            toast.error(message);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -256,8 +305,10 @@ export function UserManagement() {
             setUsers((list) => list.filter((u) => u.id !== userToDelete.id));
             toast.success('Usuário removido');
             setUserToDelete(null);
-        } catch {
-            toast.error('Erro ao remover usuário');
+        } catch (err: unknown) {
+            const message =
+            err instanceof Error ? err.message : 'Erro ao remover usuário';
+        toast.error(message);
         } finally {
             setIsSubmitting(false);
         }
@@ -285,9 +336,7 @@ export function UserManagement() {
         setNewName('');
         setNewEmail('');
         setNewPassword('');
-        const defaultCargo =
-            cargos.find((c) => c.name.toLowerCase() === 'usuario') ?? cargos[0];
-        setNewCargoId(defaultCargo?.id);
+        setNewCargoId(getDefaultAssignableCargo(cargos, canDeleteUsers)?.id);
     };
 
     const loadPermissions = useCallback(async () => {
@@ -395,6 +444,11 @@ export function UserManagement() {
 
         const cargo = cargos.find((c) => c.id === newCargoId);
 
+        if (cargo && !canDeleteUsers && isAdminRoleCargo(cargo)) {
+            toast.error('Apenas administradores podem criar usuários com cargo de administrador');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             const created = await userService.createUser({
@@ -443,6 +497,45 @@ export function UserManagement() {
         );
     };
 
+    const renderUserActions = (u: UserDTO) => {
+        const isSelf = isCurrentUser(u);
+
+        return (
+            <div className="flex justify-center gap-1">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground"
+                    disabled={isSelf}
+                    onClick={() => openEditUserDialog(u)}
+                    title={
+                        isSelf
+                            ? 'Você não pode alterar seu próprio cargo'
+                            : 'Editar cargo do usuário'
+                    }
+                >
+                    <Pencil className="h-4 w-4" />
+                </Button>
+                {canDeleteUsers && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        disabled={isSelf}
+                        onClick={() => setUserToDelete(u)}
+                        title={
+                            isSelf
+                                ? 'Você não pode remover sua própria conta'
+                                : 'Remover usuário'
+                        }
+                    >
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                )}
+            </div>
+        );
+    };
+
     const usersTable = (
         <>
             <div className="hidden md:block">
@@ -474,28 +567,10 @@ export function UserManagement() {
                                     <TableCell>{renderUserName(u)}</TableCell>
                                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
                                     <TableCell>
-                                        <CargoSelect
-                                            value={resolveUserCargoId(u, cargos)}
-                                            cargos={cargos}
-                                            disabled={isCurrentUser(u)}
-                                            onChange={(cargoId) => handleCargoChange(u, cargoId)}
-                                        />
+                                        <UserCargoLabel user={u} cargos={cargos} />
                                     </TableCell>
                                     <TableCell className="text-center">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="text-muted-foreground hover:text-destructive"
-                                            disabled={isCurrentUser(u)}
-                                            onClick={() => setUserToDelete(u)}
-                                            title={
-                                                isCurrentUser(u)
-                                                    ? 'Você não pode remover sua própria conta'
-                                                    : 'Remover usuário'
-                                            }
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        {renderUserActions(u)}
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -514,15 +589,7 @@ export function UserManagement() {
                         <div key={u.id ?? u.email} className="space-y-3 rounded-lg border bg-card p-4">
                             <div className="flex items-start justify-between gap-2">
                                 {renderUserName(u)}
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                                    disabled={isCurrentUser(u)}
-                                    onClick={() => setUserToDelete(u)}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
+                                {renderUserActions(u)}
                             </div>
                             <div className="grid grid-cols-1 gap-2 text-sm">
                                 <div>
@@ -531,14 +598,9 @@ export function UserManagement() {
                                 </div>
                                 <div>
                                     <span className="text-muted-foreground">Cargo</span>
-                                    <div className="mt-1">
-                                        <CargoSelect
-                                            value={resolveUserCargoId(u, cargos)}
-                                            cargos={cargos}
-                                            disabled={isCurrentUser(u)}
-                                            onChange={(cargoId) => handleCargoChange(u, cargoId)}
-                                        />
-                                    </div>
+                                    <p className="mt-1">
+                                        <UserCargoLabel user={u} cargos={cargos} />
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -714,6 +776,7 @@ export function UserManagement() {
                                         Gerencie os cargos disponíveis na aba <strong
                                         className="text-foreground">Cargos</strong>
                                     </li>
+                                    <li>O cargo pode ser alterado pela ação Editar na lista de usuários</li>
                                     <li>Você não pode alterar seu próprio cargo ou remover sua conta</li>
                                 </ul>
                             </div>
@@ -799,12 +862,21 @@ export function UserManagement() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {cargos.map((cargo) => (
-                                        <SelectItem key={cargo.id} value={String(cargo.id)}>
+                                        <SelectItem
+                                            key={cargo.id}
+                                            value={String(cargo.id)}
+                                            disabled={!canDeleteUsers && isAdminRoleCargo(cargo)}
+                                        >
                                             {cargo.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {!canDeleteUsers && (
+                                <p className="text-xs text-muted-foreground">
+                                    Apenas administradores podem criar usuários com cargo de administrador.
+                                </p>
+                            )}
                         </div>
                         <DialogFooter className="flex-col gap-2 sm:flex-row">
                             <Button
@@ -818,6 +890,75 @@ export function UserManagement() {
                             </Button>
                             <Button type="submit" className="w-full sm:w-auto" disabled={isSubmitting}>
                                 {isSubmitting ? 'Salvando...' : 'Adicionar'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={editUserDialogOpen}
+                onOpenChange={(open) => {
+                    setEditUserDialogOpen(open);
+                    if (!open) resetEditUserForm();
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Editar Usuário</DialogTitle>
+                        <DialogDescription>
+                            Altere o cargo de acesso de <strong>{editingUser?.name}</strong>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleEditUserSave} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-user-email">Email/Login</Label>
+                            <Input
+                                id="edit-user-email"
+                                value={editingUser?.email ?? ''}
+                                disabled
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Cargo</Label>
+                            <Select
+                                value={editCargoId != null ? String(editCargoId) : undefined}
+                                onValueChange={(v) => setEditCargoId(Number(v))}
+                                disabled={isSubmitting || cargos.length === 0}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione um cargo" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {cargos.map((cargo) => (
+                                        <SelectItem
+                                            key={cargo.id}
+                                            value={String(cargo.id)}
+                                            disabled={!canDeleteUsers && isAdminRoleCargo(cargo)}
+                                        >
+                                            {cargo.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {!canDeleteUsers && (
+                                <p className="text-xs text-muted-foreground">
+                                    Apenas administradores podem atribuir um cargo com permissão de administrador.
+                                </p>
+                            )}
+                        </div>
+                        <DialogFooter className="flex-col gap-2 sm:flex-row">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full sm:w-auto"
+                                onClick={() => setEditUserDialogOpen(false)}
+                                disabled={isSubmitting}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button type="submit" className="w-full sm:w-auto" disabled={isSubmitting}>
+                                {isSubmitting ? 'Salvando...' : 'Salvar'}
                             </Button>
                         </DialogFooter>
                     </form>
